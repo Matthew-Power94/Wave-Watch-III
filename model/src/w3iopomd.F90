@@ -1350,6 +1350,7 @@ CONTAINS
     INTEGER, INTENT(IN), OPTIONAL :: TOUT(2)
     CHARACTER(LEN=15) :: TIMETAG
     LOGICAL :: per_time_step
+    LOGICAL :: FILE_EXISTS
     INTEGER :: IGRD,MK,MTH
     integer :: fh, itime
     integer :: d_nopts, d_nspec, d_vsize, d_namelen, d_grdidlen, d_time
@@ -1375,7 +1376,7 @@ CONTAINS
     ELSE
       IGRD = 1
     END IF
-
+    
     ! Determine if we are reading a per-time-step file
     per_time_step = PRESENT(TOUT)
     IF (per_time_step) THEN
@@ -1384,9 +1385,19 @@ CONTAINS
     ELSE
       filename = FNMPRE(:LEN_TRIM(FNMPRE))//'out_pnt.'//FILEXT(:LEN_TRIM(FILEXT))//'.nc'
     END IF
+    
+    ! Check if the file exists
+    INQUIRE(FILE=TRIM(filename), EXIST=FILE_EXISTS)
+    
+    IF (.NOT. FILE_EXISTS) THEN
+       filename = TRIM(FNMPRE)//'out_pnt.ww3.nc'
+    END IF
+    ! ----------------------------------
 
     ! Open the netCDF file.
-    ncerr = nf90_open(filename, NF90_NOWRITE, fh)
+    ncerr = nf90_open(TRIM(filename), NF90_NOWRITE, fh)
+    
+    ! Check if there is an error to prevent "Not a valid ID" crashes
     if (nf90_err(ncerr) .ne. 0) return
 
     ! Read and check the version:
@@ -2261,6 +2272,7 @@ CONTAINS
 
     ! DEFINED A LOCAL FNMPRE TO AVOID CHANGE THE GLOBAL VALUE
     CHARACTER(LEN=256)       :: FNMPRE_LOCAL
+    LOGICAL                  :: FILE_EXISTS
 
     !/
     !/ ------------------------------------------------------------------- /
@@ -2325,8 +2337,18 @@ CONTAINS
         IF (IERR.NE.0) CALL EXTOPN(NDSE,IERR,'W3IOPO','',20)
 #endif
       ELSE
-        OPEN (NDSOP,FILE=FNMPRE_LOCAL(:J)//'out_pnt.'//FILEXT(:I),    &
-             form='UNFORMATTED', convert=file_endian,IOSTAT=IERR,STATUS='OLD')
+        ! Check for grid-specific binary file first
+        INQUIRE(FILE=FNMPRE_LOCAL(:J)//'out_pnt.'//FILEXT(:I), EXIST=FILE_EXISTS)
+        
+        IF (FILE_EXISTS) THEN
+           OPEN (NDSOP,FILE=FNMPRE_LOCAL(:J)//'out_pnt.'//FILEXT(:I),    &
+                form='UNFORMATTED', convert=file_endian,IOSTAT=IERR,STATUS='OLD')
+        ELSE
+           ! Fallback to generic WW3 binary file
+           OPEN (NDSOP,FILE=FNMPRE_LOCAL(:J)//'out_pnt.ww3',    &
+                form='UNFORMATTED', convert=file_endian,IOSTAT=IERR,STATUS='OLD')
+        END IF
+        
         IF (IERR.NE.0) CALL EXTOPN(NDSE,IERR,'W3IOPO','',20)
       END IF
       !
